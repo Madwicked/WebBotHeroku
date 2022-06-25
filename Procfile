@@ -1,1 +1,1 @@
-bot: python 3 GitBot.py
+bot: python3 GitBot.py
