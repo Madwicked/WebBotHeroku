@@ -31,7 +31,7 @@ def change_data(key, user_id, value):
     data[key][user_id]=value
     json.dump(
         data,
-        open('db/data.json', 'w', encoding='utf-8'),
+        open('data.json', 'w', encoding='utf-8'),
         indent=4,
         ensure_ascii=False,  # сохраняет русские символы
     )
