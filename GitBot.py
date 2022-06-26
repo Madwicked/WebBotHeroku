@@ -1,10 +1,11 @@
 import telebot
 from telebot import types
 import json
+import os
+
+token = os.environ['TELEGRAM_TOKEN']
 
 
-
-token = '5322181713:AAGK5Ch9_fz1TmIFminuJwoKcby4fJzAHAY'
 bot = telebot.TeleBot(token)
 MAIN_STATE = 'main'
 CITY_STATE = 'city'
