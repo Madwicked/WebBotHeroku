@@ -5,7 +5,6 @@ import os
 
 token = os.environ['TELEGRAM_TOKEN']
 
-
 bot = telebot.TeleBot(token)
 MAIN_STATE = 'main'
 CITY_STATE = 'city'
