@@ -2,17 +2,22 @@ import telebot
 from telebot import types
 import json
 import os
+import requests
 
 token = os.environ['TELEGRAM_TOKEN']
+WEATHER_TOKEN = os.environ['WEATHER_TOKEN']
+WEATHER_URL = os.environ['WEATHER_URL']
+
+
 
 bot = telebot.TeleBot(token)
 MAIN_STATE = 'main'
 CITY_STATE = 'city'
 WEATHER_DATE_STATE = 'weather_date_handler'  # почему-то у него weather_date_handler
-#states = {}
+# states = {}
 
 
-try: #ловит исключения, типа если нет файла, то создает
+try:  # ловит исключения, типа если нет файла, то создает
     data = json.load(open('data.json', 'r', encoding='utf-8'))
 except FileNotFoundError:
     data = {
@@ -27,8 +32,10 @@ except FileNotFoundError:
             # id:city
         },
     }
-def change_data(key, user_id, value):
-    data[key][user_id]=value
+
+
+def change_data(key, user_id, value):  # функция записи состояния в файл data.json
+    data[key][user_id] = value
     json.dump(
         data,
         open('data.json', 'w', encoding='utf-8'),
@@ -37,15 +44,12 @@ def change_data(key, user_id, value):
     )
 
 
-
 @bot.message_handler(func=lambda message: True)
 def dispecher(message):
     #    print(states)
     user_id = str(message.from_user.id)
-
     state = data['states'].get(user_id, MAIN_STATE)
-
-    if state == MAIN_STATE:
+    if state == MAIN_STATE:  # В зависимости от на каком состоянии пользователь вызывает соответствующую функцию
         main_handler(message)
     elif state == CITY_STATE:
         city_handler(message)
@@ -53,9 +57,9 @@ def dispecher(message):
         weather_date(message)
 
 
-def main_handler(message):
+def main_handler(message):  # функция главного состояния
     user_id = str(message.from_user.id)
-    if message.text == '/start':
+    if message.text == '/start':  # по команде /start создает кнопку "Погода"
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton('Погода'))
 
@@ -63,70 +67,78 @@ def main_handler(message):
             user_id,
             'Это бот погоды',
             reply_markup=markup,
-        )
+        )  # Отправляет сообщение и меняет состояние пользователя на MAIN_STATE
         change_data('states', user_id, MAIN_STATE)
     # print(message)
-    elif message.text.lower() == 'погода':
+    elif message.text.lower() == 'погода':  # если сразу отправляет погода, то добавляет 2 кнопки "мск" и "спб"
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         markup.add(
-            *[types.KeyboardButton(button) for button in ['мск', 'спб']]
+            *[types.KeyboardButton(button) for button in ['сегодня', 'завтра']]
         )
-        bot.send_message(user_id, 'Город? мск или спб', reply_markup=markup)
+        bot.send_message(user_id, 'Када? сегодня или завтра',
+                         reply_markup=markup)  # Выдает сообщение и меняет состояние пользователя на CITY_STATE
 
-        change_data('states',user_id, CITY_STATE)
-
-
-
+        change_data('states', user_id, WEATHER_DATE_STATE)
     else:
         markup = types.ReplyKeyboardRemove()
         bot.send_message(user_id, 'моя твоя не понимать', reply_markup=markup)
 
 
-def city_handler(message):
+def city_handler(message):  # функция выбора города
     user_id = str(message.from_user.id)
-    if message.text.lower() in ['мск', 'спб']:
-        change_data(WEATHER_DATE_STATE, user_id,message.text.lower())
+    url = WEATHER_URL.format(city=message.text, token=WEATHER_TOKEN)  # WEATHER_URL берется с сайта (API call)
+    response = requests.get(url)
+#    print(response)
+    if response.status_code != 200:
+        bot.reply_to(message, 'моя твоя не понимать')
+    else:
+        change_data('city', user_id, message.text)
+        change_data('states', user_id, MAIN_STATE)
+
+        parse_weather_data(message)
+
+
+
+def weather_date(message):  # функция выбора дня на который мы хотим получить погоду, выдает из словаря WEATHER
+    user_id = str(message.from_user.id)
+    if message.text.lower() == 'сегодня':  # если сразу отправляет погода, то добавляет 2 кнопки "мск" и "спб"
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         markup.add(
-            *[types.KeyboardButton(button) for button in ['сегодня', 'завтра']]
+            *[types.KeyboardButton(button) for button in ['москва', 'санкт-петербург', 'уфа']]
         )
-        bot.send_message(user_id, 'Када? Введи "сегодня" или "завтра"', reply_markup=markup)
-        change_data('states', user_id, WEATHER_DATE_STATE)
-    else:
-        bot.reply_to(message, 'моя твоя не понимать')
-
-
-WEATHER = {
-    'спб': {
-        'сегодня': 27,
-        'завтра': 32,
-
-    },
-    'мск': {
-        'сегодня': -5,
-        'завтра': -15,
-    }
-}
-
-
-def weather_date(message):
-    user_id = str(message.from_user.id)
-    city = data[WEATHER_DATE_STATE][user_id]
-
-    if message.text == 'сегодня':
-        bot.send_message(user_id, WEATHER[city][message.text.lower()])
-        change_data('states',user_id, MAIN_STATE)
+        bot.send_message(user_id, 'Город? мск или спб или напиши свой ',
+                         reply_markup=markup)  # Выдает сообщение и меняет состояние пользователя на CITY_STATE
+        change_data('states', user_id, CITY_STATE)
 
     elif message.text == 'завтра':
-        bot.send_message(user_id, WEATHER[city][message.text.lower()])
-        change_data('states', user_id, MAIN_STATE)
-    elif message.text.lower() == 'назад':
-        bot.send_message(user_id, 'Вернулся назад')
-        change_data('states', user_id, MAIN_STATE)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        markup.add(
+            *[types.KeyboardButton(button) for button in ['москва', 'санкт-петербург', 'уфа']]
+        )
+        bot.send_message(user_id, 'Город? мск или спб или напиши свой ',
+                         reply_markup=markup)  # Выдает сообщение и меняет состояние пользователя на CITY_STATE
+        change_data('states', user_id, CITY_STATE)
+
     else:
         bot.reply_to(message, 'моя твоя не понимать')
 
-
+def parse_weather_data(message):
+    user_id = str(message.from_user.id)
+    city = data['city'][user_id]
+#    print(city)
+    url = WEATHER_URL.format(city=city, token=WEATHER_TOKEN)
+    response = requests.get(url)
+    resp = json.loads(response.content)
+#    print(url)
+#    print(resp)
+    for elem in resp['weather']:
+        weather_state = elem['main']
+    temp = round(resp['main']['temp'] - 273.15, 2),
+    feels_like = round(resp['main']['feels_like'] - 273.15, 2),
+    city = resp['name']
+    country = resp['sys']['country']
+    msg = f'the weather in {city}: Temp is {temp}, feels like {feels_like}, State is {weather_state}, country is {country}'
+    bot.send_message(user_id, msg)
 if __name__ == '__main__':
     bot.polling()
     print('бот остановлен')
